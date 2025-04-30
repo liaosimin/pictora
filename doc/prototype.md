@@ -26,7 +26,7 @@
 2、后端
 2.1、用python语言
 2.2、用fastapi框架
-2.3、用openai api
+2.3、用openai api来实现ai生成图片功能
 2.4、用mongodb数据库
 
 对你的要求：
