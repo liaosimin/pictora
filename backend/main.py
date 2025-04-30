@@ -1,0 +1,302 @@
+from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from typing import List, Optional
+import os
+import uuid
+from datetime import datetime
+
+# 导入自定义模块
+from config import settings
+from database import get_database
+from models import User, Task, Style, Credit
+from auth import get_current_user, create_access_token
+from openai_service import generate_image
+
+# 创建FastAPI应用
+app = FastAPI(title="Pictora API", description="AI图片生成应用的后端API")
+
+# 配置CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 在生产环境中应该限制为前端域名
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 创建上传目录
+os.makedirs("uploads", exist_ok=True)
+os.makedirs("results", exist_ok=True)
+
+# 挂载静态文件目录
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/results", StaticFiles(directory="results"), name="results")
+
+# 请求模型
+class StyleRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    prompt_template: str
+    preview_image: Optional[str] = None
+    category: Optional[str] = None
+    is_popular: bool = False
+
+class TaskRequest(BaseModel):
+    style_id: str
+    custom_prompt: Optional[str] = None
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    email: str
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+# 路由
+@app.get("/")
+async def read_root():
+    return {"message": "欢迎使用Pictora AI图片生成API"}
+
+# 用户相关路由
+@app.post("/users/register")
+async def register_user(user: UserCreate, db=Depends(get_database)):
+    # 检查用户名是否已存在
+    existing_user = await db.users.find_one({"username": user.username})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="用户名已存在")
+    
+    # 创建新用户
+    new_user = User.create(user.username, user.password, user.email)
+    result = await db.users.insert_one(new_user.dict())
+    
+    # 为新用户创建初始积分
+    initial_credit = Credit(user_id=str(result.inserted_id), amount=10, is_vip=False)
+    await db.credits.insert_one(initial_credit.dict())
+    
+    return {"message": "注册成功", "user_id": str(result.inserted_id)}
+
+@app.post("/users/login")
+async def login_user(user: UserLogin, db=Depends(get_database)):
+    # 验证用户
+    db_user = await db.users.find_one({"username": user.username})
+    if not db_user or not User.verify_password(user.password, db_user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
+    
+    # 生成访问令牌
+    access_token = create_access_token(data={"sub": db_user["username"]})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/users/me")
+async def get_user_profile(current_user: dict = Depends(get_current_user), db=Depends(get_database)):
+    # 获取用户积分信息
+    credit_info = await db.credits.find_one({"user_id": current_user["_id"]})
+    
+    return {
+        "username": current_user["username"],
+        "email": current_user["email"],
+        "credits": credit_info["amount"] if credit_info else 0,
+        "is_vip": credit_info["is_vip"] if credit_info else False
+    }
+
+# 风格效果相关路由
+@app.get("/styles")
+async def get_styles(category: Optional[str] = None, popular: Optional[bool] = None, db=Depends(get_database)):
+    # 构建查询条件
+    query = {}
+    if category:
+        query["category"] = category
+    if popular is not None:
+        query["is_popular"] = popular
+    
+    # 查询风格列表
+    styles = await db.styles.find(query).to_list(100)
+    return styles
+
+@app.post("/styles", status_code=status.HTTP_201_CREATED)
+async def create_style(style: StyleRequest, db=Depends(get_database), current_user: dict = Depends(get_current_user)):
+    # 只允许管理员创建风格
+    if not current_user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="只有管理员可以创建风格")
+    
+    # 创建新风格
+    new_style = Style(
+        name=style.name,
+        description=style.description,
+        prompt_template=style.prompt_template,
+        preview_image=style.preview_image,
+        category=style.category,
+        is_popular=style.is_popular
+    )
+    result = await db.styles.insert_one(new_style.dict())
+    return {"id": str(result.inserted_id), **new_style.dict()}
+
+# 图片生成任务相关路由
+@app.post("/tasks")
+async def create_task(
+    task: TaskRequest,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_database)
+):
+    # 检查用户积分
+    credit_info = await db.credits.find_one({"user_id": current_user["_id"]})
+    if not credit_info or credit_info["amount"] <= 0:
+        raise HTTPException(status_code=402, detail="积分不足，请充值")
+    
+    # 获取选择的风格
+    style = await db.styles.find_one({"_id": task.style_id})
+    if not style:
+        raise HTTPException(status_code=404, detail="风格不存在")
+    
+    # 保存上传的图片
+    file_extension = os.path.splitext(file.filename)[1]
+    file_name = f"{uuid.uuid4()}{file_extension}"
+    file_path = f"uploads/{file_name}"
+    
+    with open(file_path, "wb") as buffer:
+        buffer.write(await file.read())
+    
+    # 创建任务
+    new_task = Task(
+        user_id=current_user["_id"],
+        style_id=task.style_id,
+        input_image=file_path,
+        custom_prompt=task.custom_prompt,
+        status="pending",
+        created_at=datetime.now()
+    )
+    
+    result = await db.tasks.insert_one(new_task.dict())
+    task_id = str(result.inserted_id)
+    
+    # 扣减积分
+    await db.credits.update_one(
+        {"user_id": current_user["_id"]},
+        {"$inc": {"amount": -1}}
+    )
+    
+    # 异步处理图片生成（实际项目中应该使用消息队列或后台任务）
+    # 这里简化处理，直接调用OpenAI API
+    try:
+        # 构建完整提示词
+        prompt = style["prompt_template"]
+        if task.custom_prompt:
+            prompt += f" {task.custom_prompt}"
+        
+        # 调用OpenAI生成图片
+        result_image_path = await generate_image(file_path, prompt, task_id)
+        
+        # 更新任务状态
+        await db.tasks.update_one(
+            {"_id": task_id},
+            {"$set": {"status": "completed", "output_image": result_image_path}}
+        )
+        
+        return {"task_id": task_id, "status": "completed", "message": "图片生成成功"}
+    except Exception as e:
+        # 更新任务状态为失败
+        await db.tasks.update_one(
+            {"_id": task_id},
+            {"$set": {"status": "failed", "error": str(e)}}
+        )
+        return {"task_id": task_id, "status": "failed", "message": str(e)}
+
+@app.get("/tasks")
+async def get_user_tasks(status: Optional[str] = None, current_user: dict = Depends(get_current_user), db=Depends(get_database)):
+    # 构建查询条件
+    query = {"user_id": current_user["_id"]}
+    if status:
+        query["status"] = status
+    
+    # 查询用户任务
+    tasks = await db.tasks.find(query).sort("created_at", -1).to_list(50)
+    return tasks
+
+@app.get("/tasks/{task_id}")
+async def get_task(task_id: str, current_user: dict = Depends(get_current_user), db=Depends(get_database)):
+    # 查询任务
+    task = await db.tasks.find_one({"_id": task_id, "user_id": current_user["_id"]})
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在或无权访问")
+    
+    return task
+
+@app.post("/tasks/{task_id}/retry")
+async def retry_task(task_id: str, current_user: dict = Depends(get_current_user), db=Depends(get_database)):
+    # 查询任务
+    task = await db.tasks.find_one({"_id": task_id, "user_id": current_user["_id"]})
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在或无权访问")
+    
+    if task["status"] != "failed":
+        raise HTTPException(status_code=400, detail="只能重试失败的任务")
+    
+    # 检查用户积分
+    credit_info = await db.credits.find_one({"user_id": current_user["_id"]})
+    if not credit_info or credit_info["amount"] <= 0:
+        raise HTTPException(status_code=402, detail="积分不足，请充值")
+    
+    # 获取风格
+    style = await db.styles.find_one({"_id": task["style_id"]})
+    if not style:
+        raise HTTPException(status_code=404, detail="风格不存在")
+    
+    # 更新任务状态
+    await db.tasks.update_one(
+        {"_id": task_id},
+        {"$set": {"status": "pending", "error": None}}
+    )
+    
+    # 扣减积分
+    await db.credits.update_one(
+        {"user_id": current_user["_id"]},
+        {"$inc": {"amount": -1}}
+    )
+    
+    # 重新生成图片
+    try:
+        # 构建完整提示词
+        prompt = style["prompt_template"]
+        if task["custom_prompt"]:
+            prompt += f" {task['custom_prompt']}"
+        
+        # 调用OpenAI生成图片
+        result_image_path = await generate_image(task["input_image"], prompt, task_id)
+        
+        # 更新任务状态
+        await db.tasks.update_one(
+            {"_id": task_id},
+            {"$set": {"status": "completed", "output_image": result_image_path}}
+        )
+        
+        return {"task_id": task_id, "status": "completed", "message": "图片重新生成成功"}
+    except Exception as e:
+        # 更新任务状态为失败
+        await db.tasks.update_one(
+            {"_id": task_id},
+            {"$set": {"status": "failed", "error": str(e)}}
+        )
+        return {"task_id": task_id, "status": "failed", "message": str(e)}
+
+# VIP相关路由
+@app.post("/vip/subscribe")
+async def subscribe_vip(current_user: dict = Depends(get_current_user), db=Depends(get_database)):
+    # 在实际项目中，这里应该有支付逻辑
+    # 这里简化处理，直接将用户设为VIP并增加积分
+    
+    await db.credits.update_one(
+        {"user_id": current_user["_id"]},
+        {"$set": {"is_vip": True}, "$inc": {"amount": 100}}
+    )
+    
+    return {"message": "VIP订阅成功，已增加100积分"}
+
+# 启动服务器
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
