@@ -54,7 +54,8 @@ router.beforeEach((to, from, next) => {
   document.title = to.meta.title ? `${to.meta.title} - Pictora` : 'Pictora'
   
   // 检查是否需要身份验证的路由
-  const publicPages = ['/login', '/register']
+  //const publicPages = ['/login', '/register']
+  const publicPages = ['/login', '/register','/generate', '/styles', '/tasks', '/profile']
   const authRequired = !publicPages.includes(to.path)
   const loggedIn = localStorage.getItem('token')
   
