@@ -2,7 +2,7 @@
   <div class="auth-container">
     <div class="auth-card">
       <div class="logo-container">
-        <img src="../assets/logo.png" alt="Pictora Logo" class="logo" />
+        <img src="../assets/logo.svg" alt="Pictora Logo" class="logo" />
         <h1 class="brand-name">PICTORA</h1>
       </div>
       
