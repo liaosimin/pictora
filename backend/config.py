@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     
     # MongoDB设置
     MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-    DATABASE_NAME: str = os.getenv("DATABASE_NAME", "pictora_db")
+    DATABASE_NAME: str = os.getenv("DATABASE_NAME", "pictora")
     
     # OpenAI设置
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
