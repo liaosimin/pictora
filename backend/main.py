@@ -75,10 +75,10 @@ async def register_user(user: UserCreate, db=Depends(get_db)):
         raise HTTPException(status_code=400, detail="用户名已存在")
     # 创建新用户
     new_user = User.create(user.username, user.password, user.email)
-    result = UserDAO.create(db, new_user)
+    result = await UserDAO.create(db, new_user)
     # 为新用户创建初始积分
     initial_credit = Credit(user_id=str(result.id), amount=10, is_vip=False)
-    create_credit(db, initial_credit)
+    await create_credit(db, initial_credit)
     return {"message": "注册成功", "user_id": str(result.id)}
 
 @app.post("/users/login")
@@ -94,7 +94,7 @@ async def login_user(user: UserLogin, db=Depends(get_db)):
 @app.get("/users/me")
 async def get_user_profile(current_user: dict = Depends(get_current_user), db=Depends(get_db)):
     # 获取用户积分信息
-    credit_info = get_credit_by_user_id(db, current_user["id"])
+    credit_info = await get_credit_by_user_id(db, current_user["id"])
     return {
         "username": current_user["username"],
         "email": current_user["email"],
@@ -105,7 +105,7 @@ async def get_user_profile(current_user: dict = Depends(get_current_user), db=De
 # 风格效果相关路由
 @app.get("/styles")
 async def get_styles_route(category: Optional[str] = None, popular: Optional[bool] = None, db=Depends(get_db)):
-    styles = get_styles(db, category, popular)
+    styles = await get_styles(db, category, popular)
     return styles
 
 @app.post("/styles", status_code=status.HTTP_201_CREATED)
@@ -120,7 +120,7 @@ async def create_style_route(style: StyleRequest, db=Depends(get_db), current_us
         category=style.category,
         is_popular=style.is_popular
     )
-    result = create_style(db, new_style)
+    result = await create_style(db, new_style)
     return {"id": str(result.id), **new_style.dict()}
 
 # 图片生成任务相关路由

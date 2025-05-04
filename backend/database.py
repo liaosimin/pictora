@@ -6,15 +6,6 @@ from config import settings
 # 数据库连接客户端
 client = None
 
-# 获取数据库连接
-async def get_database():
-    global client
-    if client is None:
-        client = AsyncIOMotorClient(settings.MONGODB_URL)
-    
-    db = client[settings.DATABASE_NAME]
-    return db
-
 # 创建MySQL异步引擎
 engine = create_async_engine(settings.MYSQL_URL, echo=True, future=True)
 
