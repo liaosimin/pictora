@@ -1,22 +1,27 @@
 # 任务相关MySQL数据库操作
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from models import Task
 
-def create_task(db: Session, task: Task):
+async def create_task(db: AsyncSession, task: Task):
     db.add(task)
-    db.commit()
-    db.refresh(task)
+    await db.commit()
+    await db.refresh(task)
     return task
 
-def get_task_by_id(db: Session, task_id: int):
-    return db.query(Task).filter(Task.id == task_id).first()
+async def get_task_by_id(db: AsyncSession, task_id: int):
+    stmt = select(Task).where(Task.id == task_id)
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
 
-def update_task_status(db: Session, task_id: int, status: str, output_image: str = None):
-    task = db.query(Task).filter(Task.id == task_id).first()
+async def update_task_status(db: AsyncSession, task_id: int, status: str, output_image: str = None):
+    stmt = select(Task).where(Task.id == task_id)
+    result = await db.execute(stmt)
+    task = result.scalar_one_or_none()
     if task:
         task.status = status
         if output_image:
             task.output_image = output_image
-        db.commit()
-        db.refresh(task)
+        await db.commit()
+        await db.refresh(task)
     return task

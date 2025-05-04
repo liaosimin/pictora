@@ -1,14 +1,19 @@
 # 风格相关MySQL数据库操作
-def get_styles(db, category=None, popular=None):
-    query = db.query(Style)
-    if category:
-        query = query.filter(Style.category == category)
-    if popular is not None:
-        query = query.filter(Style.is_popular == popular)
-    return query.all()
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from models import Style
 
-def create_style(db, style):
+async def get_styles(db: AsyncSession, category=None, popular=None):
+    stmt = select(Style)
+    if category:
+        stmt = stmt.where(Style.category == category)
+    if popular is not None:
+        stmt = stmt.where(Style.is_popular == popular)
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+async def create_style(db: AsyncSession, style: Style):
     db.add(style)
-    db.commit()
-    db.refresh(style)
+    await db.commit()
+    await db.refresh(style)
     return style

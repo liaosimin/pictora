@@ -129,7 +129,7 @@ async def create_task(
     task: TaskRequest,
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
-    db=Depends(get_database)
+    db=Depends(get_db)
 ):
     # 检查用户积分
     credit_info = await db.credits.find_one({"user_id": current_user["_id"]})
@@ -195,7 +195,7 @@ async def create_task(
         return {"task_id": task_id, "status": "failed", "message": str(e)}
 
 @app.get("/tasks")
-async def get_user_tasks(status: Optional[str] = None, current_user: dict = Depends(get_current_user), db=Depends(get_database)):
+async def get_user_tasks(status: Optional[str] = None, current_user: dict = Depends(get_current_user), db=Depends(get_db)):
     # 构建查询条件
     query = {"user_id": current_user["_id"]}
     if status:
@@ -206,7 +206,7 @@ async def get_user_tasks(status: Optional[str] = None, current_user: dict = Depe
     return tasks
 
 @app.get("/tasks/{task_id}")
-async def get_task(task_id: str, current_user: dict = Depends(get_current_user), db=Depends(get_database)):
+async def get_task(task_id: str, current_user: dict = Depends(get_current_user), db=Depends(get_db)):
     # 查询任务
     task = await db.tasks.find_one({"_id": task_id, "user_id": current_user["_id"]})
     if not task:
@@ -215,7 +215,7 @@ async def get_task(task_id: str, current_user: dict = Depends(get_current_user),
     return task
 
 @app.post("/tasks/{task_id}/retry")
-async def retry_task(task_id: str, current_user: dict = Depends(get_current_user), db=Depends(get_database)):
+async def retry_task(task_id: str, current_user: dict = Depends(get_current_user), db=Depends(get_db)):
     # 查询任务
     task = await db.tasks.find_one({"_id": task_id, "user_id": current_user["_id"]})
     if not task:
@@ -273,7 +273,7 @@ async def retry_task(task_id: str, current_user: dict = Depends(get_current_user
 
 # VIP相关路由
 @app.post("/vip/subscribe")
-async def subscribe_vip(current_user: dict = Depends(get_current_user), db=Depends(get_database)):
+async def subscribe_vip(current_user: dict = Depends(get_current_user), db=Depends(get_db)):
     # 在实际项目中，这里应该有支付逻辑
     # 这里简化处理，直接将用户设为VIP并增加积分
     
