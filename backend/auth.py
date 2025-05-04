@@ -7,7 +7,7 @@ from jose import JWTError, jwt
 from pydantic import BaseModel
 
 from config import settings
-from database import get_database
+from database import get_db
 
 # OAuth2 密码流认证
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
@@ -30,7 +30,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 # 获取当前用户
-async def get_current_user(token: str = Depends(oauth2_scheme), db = Depends(get_database)):
+async def get_current_user(token: str = Depends(oauth2_scheme), db = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="无效的身份凭证",
@@ -50,7 +50,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db = Depends(get
         raise credentials_exception
     
     # 从数据库获取用户
-    user = await db.users.find_one({"username": token_data.username})
+    # user = await db.users.find_one({"username": token_data.username})
+    from dao.user_dao import UserDAO
+    user = await UserDAO.get_by_username(db, token_data.username)
     
     if user is None:
         raise credentials_exception

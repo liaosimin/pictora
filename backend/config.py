@@ -10,8 +10,8 @@ class Settings(BaseSettings):
     APP_NAME: str = "Pictora"
     APP_DESCRIPTION: str = "AI图片生成应用"
     
-    # MongoDB设置
-    MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+    # MySQL设置
+    MYSQL_URL: str = os.getenv("MYSQL_URL", "mysql+aiomysql://root:password@localhost:3306/pictora")
     DATABASE_NAME: str = os.getenv("DATABASE_NAME", "pictora")
     
     # OpenAI设置

@@ -10,10 +10,14 @@ from datetime import datetime
 
 # 导入自定义模块
 from config import settings
-from database import get_database
+from database import get_db
 from models import User, Task, Style, Credit
 from auth import get_current_user, create_access_token
 from openai_service import generate_image
+from dao.user_dao import UserDAO
+from dao.style_dao import get_styles, create_style
+from dao.task_dao import create_task, get_task_by_id, update_task_status
+from dao.credit_dao import get_credit_by_user_id, create_credit, update_credit_amount
 
 # 创建FastAPI应用
 app = FastAPI(title="Pictora API", description="AI图片生成应用的后端API")
@@ -64,66 +68,50 @@ async def read_root():
 
 # 用户相关路由
 @app.post("/users/register")
-async def register_user(user: UserCreate, db=Depends(get_database)):
+async def register_user(user: UserCreate, db=Depends(get_db)):
     # 检查用户名是否已存在
-    existing_user = await db.users.find_one({"username": user.username})
+    existing_user = await UserDAO.get_by_username(db, user.username)
     if existing_user:
         raise HTTPException(status_code=400, detail="用户名已存在")
-    
     # 创建新用户
     new_user = User.create(user.username, user.password, user.email)
-    result = await db.users.insert_one(new_user.dict())
-    
+    result = UserDAO.create(db, new_user)
     # 为新用户创建初始积分
-    initial_credit = Credit(user_id=str(result.inserted_id), amount=10, is_vip=False)
-    await db.credits.insert_one(initial_credit.dict())
-    
-    return {"message": "注册成功", "user_id": str(result.inserted_id)}
+    initial_credit = Credit(user_id=str(result.id), amount=10, is_vip=False)
+    create_credit(db, initial_credit)
+    return {"message": "注册成功", "user_id": str(result.id)}
 
 @app.post("/users/login")
-async def login_user(user: UserLogin, db=Depends(get_database)):
+async def login_user(user: UserLogin, db=Depends(get_db)):
     # 验证用户
-    db_user = await db.users.find_one({"username": user.username})
-    if not db_user or not User.verify_password(user.password, db_user["hashed_password"]):
+    db_user = await UserDAO.get_by_username(db, user.username)
+    if not db_user or not User.verify_password(user.password, db_user.hashed_password):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
-    
     # 生成访问令牌
-    access_token = create_access_token(data={"sub": db_user["username"]})
+    access_token = create_access_token(data={"sub": db_user.username})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/users/me")
-async def get_user_profile(current_user: dict = Depends(get_current_user), db=Depends(get_database)):
+async def get_user_profile(current_user: dict = Depends(get_current_user), db=Depends(get_db)):
     # 获取用户积分信息
-    credit_info = await db.credits.find_one({"user_id": current_user["_id"]})
-    
+    credit_info = get_credit_by_user_id(db, current_user["id"])
     return {
         "username": current_user["username"],
         "email": current_user["email"],
-        "credits": credit_info["amount"] if credit_info else 0,
-        "is_vip": credit_info["is_vip"] if credit_info else False
+        "credits": credit_info.amount if credit_info else 0,
+        "is_vip": credit_info.is_vip if credit_info else False
     }
 
 # 风格效果相关路由
 @app.get("/styles")
-async def get_styles(category: Optional[str] = None, popular: Optional[bool] = None, db=Depends(get_database)):
-    # 构建查询条件
-    query = {}
-    if category:
-        query["category"] = category
-    if popular is not None:
-        query["is_popular"] = popular
-    
-    # 查询风格列表
-    styles = await db.styles.find(query).to_list(100)
+async def get_styles_route(category: Optional[str] = None, popular: Optional[bool] = None, db=Depends(get_db)):
+    styles = get_styles(db, category, popular)
     return styles
 
 @app.post("/styles", status_code=status.HTTP_201_CREATED)
-async def create_style(style: StyleRequest, db=Depends(get_database), current_user: dict = Depends(get_current_user)):
-    # 只允许管理员创建风格
+async def create_style_route(style: StyleRequest, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     if not current_user.get("is_admin", False):
         raise HTTPException(status_code=403, detail="只有管理员可以创建风格")
-    
-    # 创建新风格
     new_style = Style(
         name=style.name,
         description=style.description,
@@ -132,8 +120,8 @@ async def create_style(style: StyleRequest, db=Depends(get_database), current_us
         category=style.category,
         is_popular=style.is_popular
     )
-    result = await db.styles.insert_one(new_style.dict())
-    return {"id": str(result.inserted_id), **new_style.dict()}
+    result = create_style(db, new_style)
+    return {"id": str(result.id), **new_style.dict()}
 
 # 图片生成任务相关路由
 @app.post("/tasks")
