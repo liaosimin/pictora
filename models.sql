@@ -7,7 +7,16 @@ CREATE TABLE users (
     is_admin BOOLEAN DEFAULT FALSE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_username (username),
-    INDEX idx_email (email)
+    INDEX idx_email (email),
+    recently_used_styles JSON  -- 修改字段名以反映最近使用的styles
+);
+
+-- 创建风格分类表
+CREATE TABLE style_categories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(64) NOT NULL UNIQUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_style_category_name (name)
 );
 
 -- 创建风格表
@@ -17,10 +26,12 @@ CREATE TABLE styles (
     description TEXT,
     prompt_template TEXT NOT NULL,
     preview_image VARCHAR(256),
-    category VARCHAR(64),
+    category_id INT, -- Changed to category_id
     is_popular BOOLEAN DEFAULT FALSE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_name (name)
+    INDEX idx_name (name),
+    INDEX idx_category_id (category_id),
+    FOREIGN KEY (category_id) REFERENCES style_categories(id) -- Foreign key to style_categories
 );
 
 -- 创建任务表
