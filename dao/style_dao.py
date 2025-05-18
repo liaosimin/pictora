@@ -4,10 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from models import Style, Task
 
-async def get_styles(db: AsyncSession, category_id=None):
+async def get_styles(db: AsyncSession, category_id=None, limit: int = 10, offset: int = 0):
     stmt = select(Style).options(joinedload(Style.category)).order_by(desc(Style.popular))
     if category_id:
         stmt = stmt.where(Style.category_id == category_id)
+    stmt = stmt.limit(limit).offset(offset)
     result = await db.execute(stmt)
     styles = result.scalars().all()
     return [{

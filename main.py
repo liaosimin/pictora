@@ -46,7 +46,7 @@ class StyleRequest(BaseModel):
     prompt_template: str
     preview_image: Optional[str] = None
     category: Optional[str] = None
-    is_popular: bool = False
+    popular: int = 0
 
 class TaskRequest(BaseModel):
     style_id: str
@@ -104,8 +104,8 @@ async def get_user_profile(current_user: dict = Depends(get_current_user), db=De
 
 # 风格效果相关路由
 @app.get("/styles")
-async def get_styles_route(category_id: Optional[int] = None, db=Depends(get_db)):
-    styles = await get_styles(db, category_id)
+async def get_styles_route(category_id: Optional[int] = None, limit: int = 10, offset: int = 0, db=Depends(get_db)):
+    styles = await get_styles(db, category_id, limit, offset)
     return styles
 
 @app.get("/styles/recent")
