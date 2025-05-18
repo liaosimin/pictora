@@ -33,7 +33,7 @@ class Style(Base):
     prompt_template = Column(Text, nullable=False)
     preview_image = Column(String(256))
     category_id = Column(Integer, ForeignKey('style_categories.id'), nullable=True, index=True) # Changed to category_id
-    is_popular = Column(Boolean, default=False)
+    popular = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.now)
     category = relationship('StyleCategory', back_populates='styles') # Relationship to StyleCategory
     tasks = relationship('Task', back_populates='style')

@@ -104,8 +104,13 @@ async def get_user_profile(current_user: dict = Depends(get_current_user), db=De
 
 # 风格效果相关路由
 @app.get("/styles")
-async def get_styles_route(category: Optional[str] = None, popular: Optional[bool] = None, db=Depends(get_db)):
-    styles = await get_styles(db, category, popular)
+async def get_styles_route(category_id: Optional[int] = None, db=Depends(get_db)):
+    styles = await get_styles(db, category_id)
+    return styles
+
+@app.get("/styles/recent")
+async def get_recent_styles_route(current_user: dict = Depends(get_current_user), db=Depends(get_db)):
+    styles = await get_user_recent_styles(db, current_user.id)
     return styles
 
 @app.post("/styles", status_code=status.HTTP_201_CREATED)
