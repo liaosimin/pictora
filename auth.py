@@ -36,25 +36,16 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db = Depends(get
         detail="无效的身份凭证",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
     try:
         # 解码JWT令牌
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        username: str = payload.get("sub")
-        
-        if username is None:
+        user_id: str = payload.get("sub")
+        if user_id is None:
             raise credentials_exception
-        
-        token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
-    
-    # 从数据库获取用户
-    # user = await db.users.find_one({"username": token_data.username})
     from dao.user_dao import UserDAO
-    user = await UserDAO.get_by_username(db, token_data.username)
-    
+    user = await UserDAO.get_by_id(db, user_id)
     if user is None:
         raise credentials_exception
-    
     return user
