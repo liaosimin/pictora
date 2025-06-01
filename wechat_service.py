@@ -13,8 +13,12 @@ async def get_wechat_session(code: str) -> dict:
     
     async with aiohttp.ClientSession() as session:
         async with session.get(url, params=params) as response:
+            text = await response.text()
+            try:
+                data = response.content_type == 'application/json' and await response.json() or __import__('json').loads(text)
+            except Exception:
+                raise Exception(f"WeChat API returned non-JSON response: {text}")
             if response.status == 200:
-                data = await response.json()
                 if 'errcode' in data and data['errcode'] != 0:
                     raise Exception(f"WeChat API error: {data['errmsg']}")
                 return data

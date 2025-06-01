@@ -10,7 +10,7 @@ class User(Base):
     __tablename__ = 'users'
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String(64), unique=True, nullable=True, index=True)  # 允许为空，因为微信用户可能没有用户名
-    hashed_password = Column(String(128), nullable=True)  # 允许为空，微信用户不需要密码
+    #hashed_password = Column(String(128), nullable=True)  # 允许为空，微信用户不需要密码
     email = Column(String(128), unique=True, nullable=True, index=True)  # 允许为空，微信用户可能没有邮箱
     openid = Column(String(64), unique=True, nullable=True, index=True)  # 微信用户的唯一标识
     is_admin = Column(Boolean, default=False)
