@@ -26,5 +26,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "uploads"
     RESULTS_DIR: str = "results"
 
-# 创建设置实例
+    WECHAT_APP_ID: str = "your-wechat-app-id"
+    WECHAT_APP_SECRET: str = "your-wechat-app-secret"
+
 settings = Settings()

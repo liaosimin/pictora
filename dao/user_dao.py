@@ -11,6 +11,13 @@ class UserDAO:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_by_openid(db: AsyncSession, openid: str):
+        """根据微信openid获取用户"""
+        stmt = select(User).where(User.openid == openid)
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def create(db: AsyncSession, user: User):
         db.add(user)
         await db.commit()

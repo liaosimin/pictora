@@ -18,6 +18,7 @@ from dao.user_dao import UserDAO
 from dao.style_dao import get_styles, create_style, get_style_categories
 from dao.task_dao import create_task, get_task_by_id, update_task_status
 from dao.credit_dao import get_credit_by_user_id, create_credit, update_credit_amount
+from wechat_service import get_wechat_session
 
 # 创建FastAPI应用
 app = FastAPI(title="Pictora API", description="AI图片生成应用的后端API")
@@ -82,14 +83,41 @@ async def register_user(user: UserCreate, db=Depends(get_db)):
     return {"message": "注册成功", "user_id": str(result.id)}
 
 @app.post("/users/login")
-async def login_user(user: UserLogin, db=Depends(get_db)):
-    # 验证用户
-    db_user = await UserDAO.get_by_username(db, user.username)
-    if not db_user or not User.verify_password(user.password, db_user.hashed_password):
-        raise HTTPException(status_code=401, detail="用户名或密码错误")
-    # 生成访问令牌
-    access_token = create_access_token(data={"sub": db_user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
+async def login_user(code: str, db=Depends(get_db)):
+    # Get WeChat session info using the code
+    try:
+        wx_session = await get_wechat_session(code)
+        openid = wx_session.get('openid')
+        session_key = wx_session.get('session_key')
+        
+        if not openid:
+            raise HTTPException(status_code=400, detail="Invalid WeChat code")
+            
+        # Check if user exists, if not create new user
+        db_user = await UserDAO.get_by_openid(db, openid)
+        if not db_user:
+            # Create new user with WeChat openid
+            new_user = User.create_wechat_user(openid)
+            db_user = await UserDAO.create(db, new_user)
+            # Create initial credits for new user
+            initial_credit = Credit(user_id=str(db_user.id), amount=10, is_vip=False)
+            await create_credit(db, initial_credit)
+            
+        # Generate access token
+        access_token = create_access_token(data={
+            "sub": str(db_user.id),
+            "openid": openid,
+            "session_key": session_key
+        })
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "is_new_user": db_user.is_new if hasattr(db_user, 'is_new') else False
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"WeChat login failed: {str(e)}")
 
 @app.get("/users/me")
 async def get_user_profile(current_user: dict = Depends(get_current_user), db=Depends(get_db)):

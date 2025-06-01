@@ -9,14 +9,25 @@ Base = declarative_base()
 class User(Base):
     __tablename__ = 'users'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String(64), unique=True, nullable=False, index=True)
-    hashed_password = Column(String(128), nullable=False)
-    email = Column(String(128), unique=True, nullable=False, index=True)
+    username = Column(String(64), unique=True, nullable=True, index=True)  # 允许为空，因为微信用户可能没有用户名
+    hashed_password = Column(String(128), nullable=True)  # 允许为空，微信用户不需要密码
+    email = Column(String(128), unique=True, nullable=True, index=True)  # 允许为空，微信用户可能没有邮箱
+    openid = Column(String(64), unique=True, nullable=True, index=True)  # 微信用户的唯一标识
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.now)
-    recently_used_styles = Column(JSON)  # 修改字段名
+    recently_used_styles = Column(JSON)
     tasks = relationship('Task', back_populates='user')
     credits = relationship('Credit', back_populates='user')
+    is_new = Column(Boolean, default=True)  # 标记是否为新用户
+
+    @classmethod
+    def create_wechat_user(cls, openid: str):
+        """创建微信用户"""
+        return cls(
+            openid=openid,
+            username=f"wx_user_{openid[:8]}",  # 生成临时用户名
+            is_new=True
+        )
 
 class StyleCategory(Base):
     __tablename__ = 'style_categories'
