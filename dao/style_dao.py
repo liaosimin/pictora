@@ -2,7 +2,7 @@
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
-from models import Style, Task
+from models import Style, Task, StyleCategory
 
 async def get_styles(db: AsyncSession, category_id=None, limit: int = 10, offset: int = 0):
     stmt = select(Style).options(joinedload(Style.category)).order_by(desc(Style.popular))
@@ -40,3 +40,14 @@ async def create_style(db: AsyncSession, style: Style):
     await db.commit()
     await db.refresh(style)
     return style
+
+async def get_style_categories(db: AsyncSession, limit: int = 10, offset: int = 0):
+    stmt = select(StyleCategory).order_by(desc(StyleCategory.popular)).limit(limit).offset(offset)
+    result = await db.execute(stmt)
+    categories = result.scalars().all()
+    return [{
+        **category.__dict__,
+        'id': category.id,
+        'name': category.name,
+        'popular': category.popular
+    } for category in categories]

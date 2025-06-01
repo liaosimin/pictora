@@ -15,7 +15,7 @@ from models import User, Task, Style, Credit
 from auth import get_current_user, create_access_token
 from openai_service import generate_image
 from dao.user_dao import UserDAO
-from dao.style_dao import get_styles, create_style
+from dao.style_dao import get_styles, create_style, get_style_categories
 from dao.task_dao import create_task, get_task_by_id, update_task_status
 from dao.credit_dao import get_credit_by_user_id, create_credit, update_credit_amount
 
@@ -293,3 +293,8 @@ async def subscribe_vip(current_user: dict = Depends(get_current_user), db=Depen
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+@app.get("/styles/categories")
+async def get_style_categories_route(limit: int = 10, offset: int = 0, db=Depends(get_db)):
+    categories = await get_style_categories(db, limit, offset)
+    return categories
