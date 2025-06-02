@@ -16,7 +16,7 @@ from auth import get_current_user, create_access_token
 from openai_service import generate_image
 from dao.user_dao import UserDAO
 from dao.style_dao import get_styles, create_style, get_style_categories
-from dao.task_dao import create_task, get_task_by_id, update_task_status
+from dao.task_dao import create_task, get_task_by_id, get_tasks_by_user_id, update_task_status
 from dao.credit_dao import get_credit_by_user_id, create_credit, update_credit_amount
 from wechat_service import get_wechat_session
 from fastapi import Body
@@ -227,13 +227,8 @@ async def create_task(
 
 @app.get("/tasks")
 async def get_user_tasks(status: Optional[str] = None, current_user: dict = Depends(get_current_user), db=Depends(get_db)):
-    # 构建查询条件
-    query = {"user_id": current_user.id}
-    if status:
-        query["status"] = status
-    
     # 查询用户任务
-    tasks = await db.tasks.find(query).sort("created_at", -1).to_list(50)
+    tasks = await get_tasks_by_user_id(db, current_user.id, status)
     return tasks
 
 @app.get("/tasks/{task_id}")

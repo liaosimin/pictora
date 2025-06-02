@@ -25,3 +25,9 @@ async def update_task_status(db: AsyncSession, task_id: int, status: str, output
         await db.commit()
         await db.refresh(task)
     return task
+async def get_tasks_by_user_id(db: AsyncSession, user_id: int, status: str = None):
+    stmt = select(Task).where(Task.user_id == user_id)
+    if status:
+        stmt = stmt.where(Task.status == status)
+    result = await db.execute(stmt)
+    return result.scalars().all()
