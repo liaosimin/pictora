@@ -108,6 +108,7 @@ async def login_user(login: UserLogin, db=Depends(get_db)):
             "openid": openid,
             "session_key": session_key
         })
+        print("Access Token:", access_token)
         return {
             "access_token": access_token,
             "token_type": "bearer",
@@ -227,7 +228,7 @@ async def create_task(
 @app.get("/tasks")
 async def get_user_tasks(status: Optional[str] = None, current_user: dict = Depends(get_current_user), db=Depends(get_db)):
     # 构建查询条件
-    query = {"user_id": current_user["_id"]}
+    query = {"user_id": current_user.id}
     if status:
         query["status"] = status
     

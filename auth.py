@@ -12,9 +12,6 @@ from database import get_db
 # OAuth2 密码流认证
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
 
-class TokenData(BaseModel):
-    username: Optional[str] = None
-
 # 创建访问令牌
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -31,6 +28,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 # 获取当前用户
 async def get_current_user(token: str = Depends(oauth2_scheme), db = Depends(get_db)):
+    print("token:",token)
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="无效的身份凭证",
@@ -40,6 +38,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db = Depends(get
         # 解码JWT令牌
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id: str = payload.get("sub")
+        print("user_id:",user_id)
         if user_id is None:
             raise credentials_exception
     except JWTError:

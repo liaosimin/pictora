@@ -23,3 +23,9 @@ class UserDAO:
         await db.commit()
         await db.refresh(user)
         return user
+    @staticmethod
+    async def get_by_id(db: AsyncSession, user_id: int):
+        """Get user by user ID"""
+        stmt = select(User).where(User.id == user_id)
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
